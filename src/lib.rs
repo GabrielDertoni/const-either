@@ -32,56 +32,57 @@
 //! }
 //! ```
 //!
-//! # Drawbacks
-//!
-//! Because of the current state of rust, the type `ConstEither<L, R>` **will have the size and
-//! alignment of the largest** from `L` and `R`.
-//!
 
-use std::{mem::ManuallyDrop, ops::{Deref, DerefMut}};
+#![allow(incomplete_features)]
+#![feature(specialization, inherent_associated_types, never_type)]
 
-pub struct ConstOption<T, const IS_SOME: bool>(ConstOptionInner<T, IS_SOME>);
+use std::ops::{Deref, DerefMut};
 
-union ConstOptionInner<T, const IS_SOME: bool> {
-    none: (),
-    some: ManuallyDrop<T>,
+pub struct ConstOption<T, const IS_SOME: bool>(
+    <ConstOptionWrapper<IS_SOME> as ConstOptionStorage<T>>::Store,
+);
+
+struct ConstOptionWrapper<const B: bool>;
+
+trait ConstOptionStorage<T> {
+    type Store;
+}
+
+impl<T, const B: bool> ConstOptionStorage<T> for ConstOptionWrapper<B> {
+    default type Store = !;
+}
+
+impl<T> ConstOptionStorage<T> for ConstOptionWrapper<false> {
+    type Store = ();
+}
+
+impl<T> ConstOptionStorage<T> for ConstOptionWrapper<true> {
+    type Store = T;
 }
 
 impl<T> ConstOption<T, false> {
     pub fn new() -> Self {
-        ConstOption(ConstOptionInner { none: () })
+        ConstOption(())
     }
 }
 
 impl<T> ConstOption<T, true> {
     pub fn new(val: T) -> Self {
-        ConstOption(ConstOptionInner { some: ManuallyDrop::new(val) })
+        ConstOption(val)
     }
 
-    pub fn into_inner(mut self) -> T {
-        unsafe { ManuallyDrop::take(&mut self.0.some) }
-    }
-}
-
-impl<T, const IS_SOME: bool> Drop for ConstOption<T, IS_SOME> {
-    fn drop(&mut self) {
-        unsafe {
-            if IS_SOME {
-                drop(ManuallyDrop::take(&mut self.0.some))
-            }
-        }
-    }
+    pub fn into_inner(self) -> T { self.0 }
 }
 
 impl<T> AsRef<T> for ConstOption<T, true> {
     fn as_ref(&self) -> &T {
-        unsafe { &self.0.some }
+        &self.0
     }
 }
 
 impl<T> AsMut<T> for ConstOption<T, true> {
     fn as_mut(&mut self) -> &mut T {
-        unsafe { &mut self.0.some }
+        &mut self.0
     }
 }
 
@@ -99,65 +100,77 @@ impl<T> DerefMut for ConstOption<T, true> {
     }
 }
 
-pub struct ConstEither<L, R, const IS_RIGHT: bool>(ConstEitherInner<L, R, IS_RIGHT>);
+pub struct ConstEither<L, R, const IS_RIGHT: bool>(
+    <ConstEitherWrapper<IS_RIGHT> as ConstEitherStorage<L, R>>::Store,
+);
 
-union ConstEitherInner<L, R, const IS_RIGHT: bool> {
-    left: ManuallyDrop<L>,
-    right: ManuallyDrop<R>,
+trait ConstEitherStorage<L, R> {
+    type Store;
 }
 
+struct ConstEitherWrapper<const B: bool>;
+
+impl<L, R, const B: bool> ConstEitherStorage<L, R> for ConstEitherWrapper<B> {
+    default type Store = !;
+}
+
+impl<L, R> ConstEitherStorage<L, R> for ConstEitherWrapper<false> {
+    type Store = L;
+}
+
+impl<L, R> ConstEitherStorage<L, R> for ConstEitherWrapper<true> {
+    type Store = R;
+}
 
 impl<L, R> ConstEither<L, R, false> {
     pub fn new(left: L) -> Self {
-        ConstEither(ConstEitherInner { left: ManuallyDrop::new(left) })
+        ConstEither(left)
     }
 
-    pub fn into_inner(mut self) -> L {
-        unsafe { ManuallyDrop::take(&mut self.0.left) }
+    pub fn into_inner(self) -> L {
+        self.0
     }
 
     pub fn flip(self) -> ConstEither<R, L, true> {
-        let val = self.into_inner();
-        ConstEither::<R, L, true>::new(val)
+        ConstEither::<R, L, true>::new(self.0)
     }
 }
 
 impl<L, R> ConstEither<L, R, true> {
     pub fn new(right: R) -> Self {
-        ConstEither(ConstEitherInner { right: ManuallyDrop::new(right) })
+        ConstEither(right)
     }
 
-    pub fn into_inner(mut self) -> R {
-        unsafe { ManuallyDrop::take(&mut self.0.right) }
+    pub fn into_inner(self) -> R {
+        self.0
     }
 
     pub fn flip(self) -> ConstEither<R, L, false> {
-        let val = self.into_inner();
-        ConstEither::<R, L, false>::new(val)
+        ConstEither::<R, L, false>::new(self.0)
     }
 }
 
 impl<L, R> AsRef<L> for ConstEither<L, R, false> {
     fn as_ref(&self) -> &L {
-        unsafe { &self.0.left }
+        &self.0
     }
 }
 
 impl<L, R> AsRef<R> for ConstEither<L, R, true> {
     fn as_ref(&self) -> &R {
-        unsafe { &self.0.right }
+        &self.0
     }
 }
 
 impl<L, R> AsMut<L> for ConstEither<L, R, false> {
     fn as_mut(&mut self) -> &mut L {
-        unsafe { &mut self.0.left }
+        &mut self.0
     }
 }
 
 impl<L, R> AsMut<R> for ConstEither<L, R, true> {
     fn as_mut(&mut self) -> &mut R {
-        unsafe { &mut self.0.right }
+        &mut self.0
     }
 }
 
@@ -186,18 +199,6 @@ impl<L, R> DerefMut for ConstEither<L, R, false> {
 impl<L, R> DerefMut for ConstEither<L, R, true> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.as_mut()
-    }
-}
-
-impl<L, R, const IS_RIGHT: bool> Drop for ConstEither<L, R, IS_RIGHT> {
-    fn drop(&mut self) {
-        unsafe {
-            if IS_RIGHT {
-                drop(ManuallyDrop::take(&mut self.0.right));
-            } else {
-                drop(ManuallyDrop::take(&mut self.0.left));
-            }
-        }
     }
 }
 
