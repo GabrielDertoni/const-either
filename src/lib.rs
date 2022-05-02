@@ -40,6 +40,7 @@
 
 use std::{mem::ManuallyDrop, ops::{Deref, DerefMut}};
 
+/// An `Option` type that is known to have or not the value at compile time.
 pub struct ConstOption<T, const IS_SOME: bool>(ConstOptionInner<T, IS_SOME>);
 
 union ConstOptionInner<T, const IS_SOME: bool> {

@@ -1,4 +1,4 @@
-# Const Enum
+# Const Either
 
 Some types to allow deciding at compile time if an option contains a value or which variant
 from the either type is active. This might be useful when you have some const generic type that
