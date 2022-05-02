@@ -40,7 +40,19 @@
 
 use std::{mem::ManuallyDrop, ops::{Deref, DerefMut}};
 
-/// An `Option` type that is known to have or not the value at compile time.
+/// An `Option` type that is known at compile-time to have or not some value. This is usefull for
+/// writing data structures that use const generics and would like to hold or not a value of some
+/// type based on a compile-time rule.
+///
+/// # Example
+///
+/// ```ignore
+/// struct Person<const HAS_DOG: bool> {
+///     name: String,
+///     age: usize,
+///     dog_name: ConstOption<String, HAS_DOG>,
+/// }
+/// ```
 pub struct ConstOption<T, const IS_SOME: bool>(ConstOptionInner<T, IS_SOME>);
 
 union ConstOptionInner<T, const IS_SOME: bool> {
@@ -100,6 +112,36 @@ impl<T> DerefMut for ConstOption<T, true> {
     }
 }
 
+/// An `Either` type that is known to hold a left or right value at compile-time. This allows data
+/// structures choose an appropriate type based on some compile-time determined policy.
+///
+/// # Example
+///
+/// ```ignore
+/// struct TheOneVec<T, const INLINE: bool, const MIN_CAPACITY: usize> {
+///     data: ConstEither<Vec<T>, tinyvec::ArrayVec<[T; MIN_CAPACITY]>, INLINE>,
+/// }
+///
+/// impl<T, const MIN_CAPACITY: usize> TheOneVec<T, false, MIN_CAPACITY> {
+///     fn new() -> Self {
+///         TheOneVec { data: ConstEither::new(Vec::with_capacity(MIN_CAPACITY)) }
+///     }
+/// }
+///
+/// impl<T, const MIN_CAPACITY: usize> TheOneVec<T, true, MIN_CAPACITY> {
+///     fn new() -> Self {
+///         TheOneVec { data: ConstEither::new(tinyvec::ArrayVec::new()) }
+///     }
+/// }
+///
+/// struct TheOneString<const INLINE: bool>(TheOneVec<u8, INLINE, 32>);
+///
+/// struct MaybeHeaplessPerson<const INLINE: bool> {
+///     name: TheOneString<INLINE>,
+///     age: usize,
+///     hobbies: TheOneVec<TheOneString<INLINE>, INLINE, 16>,
+/// }
+/// ```
 pub struct ConstEither<L, R, const IS_RIGHT: bool>(ConstEitherInner<L, R, IS_RIGHT>);
 
 union ConstEitherInner<L, R, const IS_RIGHT: bool> {
