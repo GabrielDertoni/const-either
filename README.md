@@ -10,11 +10,11 @@ should decide whether to use one datastructure or another, or no datastructure a
 let _definetly_none = ConstOption::<String, false>::new();
 let definetly_some = ConstOption::<String, true>::new("hello, world".to_string());
 
-// When there is definetly some value, the deref trait can be used.
-println!("{}", &*definetly_some);
+// When there is definitely some value, the deref trait can be used.
+println!("{}", &*definitely_some);
 
 // Obtain the string inside.
-let contained_string = definetly_some.into_inner();
+let contained_string = definitely_some.into_inner();
 
 
 struct Container<T, const IS_UNIQUE: bool> {
